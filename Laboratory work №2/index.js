@@ -1,10 +1,8 @@
 'use strict';
 
-const getDate = () => new Date().toLocaleDateString('ukr') + ' ' + new Date().toLocaleTimeString('ukr');
-
 class Note {
   constructor() {
-    this.name = 'New' + ' ' + getDate();
+    this.name = 'New';
     this.text = '';
     this.id = Date.now();
     this.selected = false;
@@ -18,16 +16,6 @@ class Note {
   getId() {
     return this.id;
   }
-  setText(text) {
-    if (!text) {
-      this.name = 'New';
-      this.text = text;
-    }
-    else {
-      this.name = text.slice(0, 30);
-      this.text = text;
-    }
-  }
   getSelected() {
     return this.selected;
   }
@@ -37,7 +25,11 @@ class Note {
   changeText(text) {
     this.text = text;
   }
-}
+};
+
+const getDate = () => {
+  return new Date().toLocaleDateString('ukr') + ' ' + new Date().toLocaleTimeString('ukr');
+};
 
 const add_button = document.getElementById('add_button');
 
@@ -47,17 +39,29 @@ const rm_button = document.getElementById('rm_button');
 
 const allNotes = [];
 
+const hashList = {};
+
 const nameOfNote = (note, text) => {
-  if (text.substr(0, 15).includes('\n')) {
-    const i = text.substr(0, 15).indexOf('\n');
-    document.getElementById(note.id).innerText = text.substr(0, i) + ' ' + getDate();
+  if (text.substr(0, 25).includes('\n')) {
+    const i = text.substr(0, 25).indexOf('\n');
+    document.getElementById(note.id).innerHTML = `${text.substr(0, i)}<br>${getDate()}`;
   }
-  else document.getElementById(note.id).innerText = text.substr(0, 15) + ' ' + getDate();
-  return document.getElementById(note.id).innerText;
+  else document.getElementById(note.id).innerHTML = `${text.substr(0, 25)}<br>${getDate()}`;
+  return document.getElementById(note.id).innerHTML;
 };
 
 let previous;
-let textOfPrevious = '';
+let previousText = '';
+let currentText = '';
+
+const changeHash = note => {
+  const namePart = note.getName().split('<br>')[0].split('');
+  namePart.forEach((value, i) => {
+    if (value === ' ') namePart[i] = '%20';
+  });
+  hashList[note.getId()] = namePart.join('') + note.getId().toString().substr(7);
+  localStorage.setItem('hashList', JSON.stringify(hashList));
+};
 
 const addClick = LI => {
   LI.addEventListener('click', () => {
@@ -65,24 +69,25 @@ const addClick = LI => {
       if (note.id == LI.id) note.setSelected(true);
       else note.setSelected(false);
     });
-    LI.style.backgroundColor = "red";
-    const textOfCurrent = document.getElementById('textg').innerHTML;
-    if (textOfPrevious !== textOfCurrent) {
+    location.hash = hashList[LI.id];
+    LI.style.backgroundColor = 'red';
+    if (previousText !== currentText) {
       const notes = JSON.parse(localStorage.notes);
       for (const value of notes) {
         if (value.id == previous.id) {
           const index = notes.indexOf(value);
           notes.splice(index, 1);
-          value.text = textOfCurrent;
-          value.name = nameOfNote(value, textOfCurrent);
+          value.text = currentText;
+          value.name = nameOfNote(value, currentText);
           notes.push(value);
           localStorage.removeItem('notes');
           localStorage.setItem('notes', JSON.stringify(notes));
           allNotes.forEach(note => {
             if (note.id == value.id) {
-              const text = textOfCurrent;
+              const text = currentText;
               note.changeText(text);
               note.name = nameOfNote(note, text);
+              changeHash(note);
             }
           });
           listOfNotes.insertBefore(previous, listOfNotes.firstChild);
@@ -93,12 +98,10 @@ const addClick = LI => {
     for (const value of notes) {
       if (value.id == LI.id) {
         document.getElementById('text').value = value.text;
-        textOfPrevious = textOfCurrent;
+        previousText = currentText;
       }
-    }
-    for (const el of JSON.parse(localStorage.notes)) {
-      if (el.id != LI.id) {
-        document.getElementById(el.id).style.backgroundColor = "gray";
+      else {
+        document.getElementById(value.id).style.backgroundColor = 'rgb(188, 210, 223)';
       }
     }
     previous = LI;
@@ -107,24 +110,33 @@ const addClick = LI => {
 
 add_button.addEventListener('click', () => {
   document.getElementById('text').value = '';
-
   const note = new Note();
   allNotes.push(note);
-  localStorage.setItem('notes', JSON.stringify(allNotes));
-  const noteLi = document.createElement('li');
-  noteLi.appendChild(document.createTextNode(note.getName()));
-  noteLi.setAttribute('id', note.getId());
-  listOfNotes.insertBefore(noteLi, listOfNotes.firstChild);
+  const noteLI = document.createElement('li');
+  noteLI.appendChild(document.createTextNode(note.getName()));
+  changeHash(note);
+  location.hash = hashList[note.getId()];
+  noteLI.setAttribute('id', note.getId());
+  listOfNotes.insertBefore(noteLI, listOfNotes.firstChild);
   const LI = document.getElementById(allNotes[allNotes.length - 1].getId());
+  document.getElementById(LI.id).innerHTML = `${note.getName()}<br>${getDate()}`;
+  note.name = `${note.getName()}<br>${getDate()}`;
+  if (localStorage.getItem('notes')) {
+    const notes = JSON.parse(localStorage.notes);
+    notes.push(note);
+    localStorage.removeItem('notes');
+    localStorage.setItem('notes', JSON.stringify(notes));
+  }
+  else localStorage.setItem('notes', JSON.stringify(allNotes));
   previous = LI;
-  LI.style.backgroundColor = "red";
+  LI.style.backgroundColor = 'red';
   note.setSelected(true);
   allNotes.forEach(value => {
-    if (value.id != note.id) value.setSelected(false);
+    if (value.id !== note.id) value.setSelected(false);
   })
   for (const el of JSON.parse(localStorage.notes)) {
     if (el.id != LI.id) {
-      document.getElementById(el.id).style.backgroundColor = "gray";
+      document.getElementById(el.id).style.backgroundColor = 'rgb(188, 210, 223)';
     }
   }
   addClick(LI);
@@ -134,20 +146,28 @@ const saveNotes = () => {
   const listOfNotes = document.getElementById('listOfNotes');
   const notes = JSON.parse(localStorage.getItem('notes')).reverse();
   for (const note of notes) {
-    const noteLi = document.createElement('li')
-    noteLi.appendChild(document.createTextNode(note.name));
-    noteLi.setAttribute('id', note.id);
-    listOfNotes.appendChild(noteLi);
+    const noteLI = document.createElement('li');
+    noteLI.appendChild(document.createTextNode(note.name));
+    noteLI.setAttribute('id', note.id);
+    listOfNotes.appendChild(noteLI);
     Object.setPrototypeOf(note, Note.prototype);
     allNotes.push(note);
   }
   for (const note of allNotes) {
     const LI = document.getElementById(note.id);
+    const name = `${note.getName().split('<br>')[0]}<br>${note.getName().split('<br>')[1]}`;
+    document.getElementById(LI.id).innerHTML = name;
+    LI.style.backgroundColor = 'rgb(188, 210, 223)';
     addClick(LI);
+  }
+  const hashes = JSON.parse(localStorage.getItem('hashList'));
+  for (const hash in hashes) {
+    hashList[hash] = hashes[hash];
   }
 };
 
 rm_button.addEventListener('click', () => {
+  location.hash = '';
   for (const note of allNotes) {
     if (note.getSelected()) {
       const index = allNotes.indexOf(note);
@@ -158,12 +178,13 @@ rm_button.addEventListener('click', () => {
       }
       const notes = JSON.parse(localStorage.notes);
       for (const value of notes) {
-        if (value.id == note.id) {
+        if (value.id === note.id) {
           const index = notes.indexOf(value);
           notes.splice(index, 1);
           localStorage.removeItem('notes');
           localStorage.setItem('notes', JSON.stringify(notes));
           document.getElementById('text').value = '';
+          delete hashList[note.id];
         }
       }
     }
@@ -171,11 +192,43 @@ rm_button.addEventListener('click', () => {
 });
 
 function myFunction() {
-  document.getElementById('textg').innerHTML = document.getElementById('text').value;
+  currentText = document.getElementById('text').value;
 };
 
-window.onload = () => {
+window.onhashchange = () => {
+  for (const key in hashList) {
+    if (`#${hashList[key]}` === location.hash) {
+      allNotes.forEach(note => {
+        if (note.getId() == previous.id) note.setSelected(false);
+        if (note.getId() == key) {
+          previous.style.backgroundColor = 'rgb(188, 210, 223)';
+          note.setSelected(true);
+          document.getElementById(note.getId()).style.backgroundColor = 'red';
+          document.getElementById('text').value = note.getText();
+          previous = document.getElementById(note.getId());
+        }
+      })
+    }
+  }
+};
+
+window.addEventListener('load', () => {
   if (localStorage.getItem('notes')) {
     saveNotes();
   }
-};
+  for (const key in hashList) {
+    if (`#${hashList[key]}` === location.hash) {
+      allNotes.forEach(note => {
+        if (note.getId() == key) {
+          listOfNotes.childNodes.forEach(li => {
+            if (li.id == note.getId()) li.innerHTML = note.getName();
+          })
+          note.setSelected(true);
+          document.getElementById(note.getId()).style.backgroundColor = 'red';
+          document.getElementById('text').value = note.getText();
+          previous = document.getElementById(note.getId());
+        }
+      })
+    }
+  }
+});
